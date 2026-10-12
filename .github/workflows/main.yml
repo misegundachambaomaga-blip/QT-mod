@@ -1,38 +1,29 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Build
 
-# Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [main]
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "build"
-  buildLinux:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
+jobs:
+  buildLinux:
+    runs-on: ubuntu-latest
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: krdlab/setup-haxe@master
         with:
-          haxe-version: 4.2.0
-      # Runs a set of commands using the runners shell
+          haxe-version: '4.2.0'
+
       - name: Install Haxelib
         run: |
           haxelib setup ~/haxelib
-          haxelib install hxcpp > /dev/null
+          haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
           haxelib --never install flixel
@@ -49,30 +40,56 @@ jobs:
           haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
           haxelib install hxcpp-debug-server
           haxelib list
+
       - name: Create Version Tag
-        run: echo "${{github.run_id}}" > VERSION
+        run: echo "${{ github.run_id }}" > VERSION
+
       - name: Compile
-        run: haxelib run lime build Project.xml linux --app-version="4.0.0-${{ github.run_id}}"
+        run: haxelib run lime build Project.xml linux --app-version="4.0.0-${{ github.run_id }}"
+
       - name: Publish Artifact
-        uses: actions/upload-artifact@v2.2.4
+        uses: actions/upload-artifact@v4
         with:
           name: linuxBuild
-          path: 'export/release/linux/bin' 
+          path: export/release/linux/bin
+          if-no-files-found: error
+
   buildWindows:
     runs-on: windows-latest
-    
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2.3.0
+      - uses: actions/checkout@v4
 
       - uses: krdlab/setup-haxe@master
         with:
-          haxe-version: 4.2.0
-      # Runs a set of commands using the runners shell
+          haxe-version: '4.2.0'
+
+      - name: Find Project.xml
+        id: find-project
+        shell: pwsh
+        run: |
+          $project = Get-ChildItem -Path $env:GITHUB_WORKSPACE `
+            -Filter "Project.xml" -Recurse -File |
+            Where-Object {
+              $_.FullName -notmatch '\\(\.git|node_modules)\\'
+            } |
+            Select-Object -First 1
+
+          if ($null -eq $project) {
+            Write-Host "Project.xml was not found."
+            Get-ChildItem $env:GITHUB_WORKSPACE -Force
+            throw "No se encontro Project.xml en el repositorio."
+          }
+
+          "PROJECT_FILE=$($project.FullName)" >> $env:GITHUB_ENV
+          "PROJECT_DIR=$($project.Directory.FullName)" >> $env:GITHUB_ENV
+
+          Write-Host "Project.xml encontrado: $($project.FullName)"
+
       - name: Install Haxelib
+        shell: cmd
         run: |
           haxelib setup C:/haxelib
-          haxelib install hxcpp > nul
+          haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
           haxelib --never install flixel
@@ -84,36 +101,49 @@ jobs:
           haxelib install tjson
           haxelib install hxjsonast
           haxelib git linc_luajit https://github.com/AndreiRudenko/linc_luajit
-          haxelib install hscript 
+          haxelib install hscript
           haxelib git hscript-ex https://github.com/ianharrigan/hscript-ex
           haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
           haxelib install hxcpp-debug-server
           haxelib list
-        shell: cmd
+
       - name: Create Version Tag
-        run: echo "${{github.run_id}}" > VERSION
-      - name: Compile
-        run: haxelib run lime build windows --app-version="4.0.0-${{ github.run_id}}"
+        shell: pwsh
+        run: |
+          "${{ github.run_id }}" | Set-Content VERSION
+
+      - name: Compile Windows
+        shell: pwsh
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          haxelib run lime build "$env:PROJECT_FILE" windows --app-version="4.0.0-${{ github.run_id }}"
+          if ($LASTEXITCODE -ne 0) {
+            throw "La compilacion de Windows fallo."
+          }
+
       - name: Publish Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windowsBuild
-          path: export/release/windows/bin
+          path: |
+            **/export/release/windows/bin/**
+            export/release/windows/bin/**
+          if-no-files-found: error
+          retention-days: 7
+
   buildMac:
     runs-on: macos-latest
-
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: krdlab/setup-haxe@master
         with:
-          haxe-version: 4.2.0
-      # Runs a set of commands using the runners shell
+          haxe-version: '4.2.0'
+
       - name: Install Haxelib
         run: |
           haxelib setup ~/haxelib
-          haxelib install hxcpp > /dev/null
+          haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
           haxelib --never install flixel
@@ -130,12 +160,16 @@ jobs:
           haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
           haxelib install hxcpp-debug-server
           haxelib list
+
       - name: Create Version Tag
-        run: echo "${{github.run_id}}" > VERSION
+        run: echo "${{ github.run_id }}" > VERSION
+
       - name: Compile
-        run: haxelib run lime build mac --app-version="4.0.0-${{ github.run_id}}"
+        run: haxelib run lime build Project.xml mac --app-version="4.0.0-${{ github.run_id }}"
+
       - name: Publish Artifact
         uses: actions/upload-artifact@v4
         with:
           name: macBuild
           path: export/release/macos/bin
+          if-no-files-found: error

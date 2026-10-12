@@ -21,11 +21,13 @@ jobs:
           haxe-version: '4.2.0'
 
       - name: Install Haxelib
+        shell: bash
         run: |
           haxelib setup ~/haxelib
           haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
+          haxelib install newgrounds
           haxelib --never install flixel
           haxelib run lime setup flixel
           haxelib run lime setup
@@ -64,14 +66,10 @@ jobs:
           haxe-version: '4.2.0'
 
       - name: Find Project.xml
-        id: find-project
         shell: pwsh
         run: |
-          $project = Get-ChildItem -Path $env:GITHUB_WORKSPACE `
-            -Filter "Project.xml" -Recurse -File |
-            Where-Object {
-              $_.FullName -notmatch '\\(\.git|node_modules)\\'
-            } |
+          $project = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "Project.xml" -Recurse -File |
+            Where-Object { $_.FullName -notmatch '\\(\.git|node_modules)\\' } |
             Select-Object -First 1
 
           if ($null -eq $project) {
@@ -82,7 +80,6 @@ jobs:
 
           "PROJECT_FILE=$($project.FullName)" >> $env:GITHUB_ENV
           "PROJECT_DIR=$($project.Directory.FullName)" >> $env:GITHUB_ENV
-
           Write-Host "Project.xml encontrado: $($project.FullName)"
 
       - name: Install Haxelib
@@ -92,6 +89,7 @@ jobs:
           haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
+          haxelib install newgrounds
           haxelib --never install flixel
           haxelib run lime setup flixel
           haxelib run lime setup
@@ -109,8 +107,7 @@ jobs:
 
       - name: Create Version Tag
         shell: pwsh
-        run: |
-          "${{ github.run_id }}" | Set-Content VERSION
+        run: '"${{ github.run_id }}" | Set-Content VERSION'
 
       - name: Compile Windows
         shell: pwsh
@@ -141,11 +138,13 @@ jobs:
           haxe-version: '4.2.0'
 
       - name: Install Haxelib
+        shell: bash
         run: |
           haxelib setup ~/haxelib
           haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
+          haxelib install newgrounds
           haxelib --never install flixel
           haxelib run lime setup flixel
           haxelib run lime setup

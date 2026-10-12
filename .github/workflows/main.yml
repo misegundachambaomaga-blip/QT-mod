@@ -28,61 +28,53 @@ jobs:
         run: haxelib setup C:\haxelib
 
       - name: Instalar dependencias
-        shell: cmd
+        shell: pwsh
         run: |
-          haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
+          haxelib install flixel
+          haxelib install flixel-addons
+          haxelib install flixel-ui
+          haxelib install hscript
+          haxelib install hxcpp
+          haxelib install linc_luajit
+          haxelib install discord_rpc
+
+      - name: Instalar Lime
+        shell: pwsh
+        run: haxelib run lime setup -y
 
       - name: Buscar Project.xml
         id: project
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path . -Filter "Project.xml" -Recurse -File |
-            Where-Object { $_.FullName -notmatch '\\(node_modules|\.git)\\' }
+          $file = Get-ChildItem . -Filter Project.xml -Recurse -File |
+            Where-Object { $_.FullName -notmatch '\\(\.git|node_modules)\\' } |
+            Select-Object -First 1
 
-          if ($files.Count -eq 0) {
-            Write-Host "No se encontro Project.xml"
-            Get-ChildItem -Path . -Force
-            throw "Project.xml no existe en el repositorio."
+          if (-not $file) {
+            throw "No se encontro Project.xml"
           }
 
-          $project = $files | Select-Object -First 1
-          $dir = $project.Directory.FullName
-          "PROJECT_DIR=$dir" >> $env:GITHUB_ENV
+          "PROJECT_DIR=$($file.Directory.FullName)" >> $env:GITHUB_ENV
+          Write-Host "Proyecto: $($file.FullName)"
 
-          Write-Host "Project.xml encontrado en: $($project.FullName)"
-
-      - name: Instalar Lime
-        shell: cmd
-        run: haxelib run lime setup -y
-
-      - name: Instalar dependencias del proyecto
+      - name: Compilar Windows x64
         shell: pwsh
         working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          if (Test-Path "hmm.json") {
-            haxelib install hmm
-            haxelib run hmm install
-          }
-
-      - name: Compilar Psych Engine
-        shell: pwsh
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          haxelib run lime build windows -64
+        run: haxelib run lime build windows -64
 
       - name: Buscar ejecutable
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path . -Filter "*.exe" -Recurse -File |
+          $files = Get-ChildItem . -Filter *.exe -Recurse -File |
             Where-Object { $_.FullName -notmatch '\\(\.git|node_modules)\\' }
 
-          if ($files.Count -eq 0) {
-            throw "La compilacion termino sin encontrar ningun EXE."
+          if (-not $files) {
+            throw "No se encontro ningun EXE compilado"
           }
 
-          $files | Select-Object -ExpandProperty FullName
+          $files | ForEach-Object { Write-Host $_.FullName }
 
       - name: Subir compilacion
         uses: actions/upload-artifact@v4
@@ -91,8 +83,8 @@ jobs:
           path: |
             **/*.exe
             **/*.dll
-            **/*.pdb
             **/assets/**
             **/mods/**
           if-no-files-found: error
           retention-days: 7
+Si

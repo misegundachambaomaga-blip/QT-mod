@@ -1468,6 +1468,7 @@ class ChartingState extends MusicBeatState
 	}
 
 	var lastConductorPos:Float;
+        var LastEditorEventTime:Float = 0;
 	var colorSine:Float = 0;
 	override function update(elapsed:Float)
 	{
@@ -1483,6 +1484,49 @@ class ChartingState extends MusicBeatState
 			changeSection();
 		}
 		Conductor.songPosition = FlxG.sound.music.time;
+                var currentEditorTime:Float = FlxG.sound.music.time;
+
+if (currentEditorTime < lastEditorEventTime)
+{
+	lastEditorEventTime = currentEditorTime;
+}
+else if (FlxG.sound.music.playing)
+{
+	for (eventData in _song.events)
+	{
+		var eventTime:Float = eventData[0];
+
+		if (eventTime > lastEditorEventTime && eventTime <= currentEditorTime)
+		{
+			for (eventInfo in eventData[1])
+			{
+				var eventName:String = Std.string(eventInfo[0]);
+				var value1:String = Std.string(eventInfo[1]);
+
+				switch (eventName)
+				{
+					case 'KB_Alert':
+						switch (value1)
+						{
+							case '1':
+								FlxG.sound.play(Paths.sound('alert'));
+							case '2':
+								FlxG.sound.play(Paths.sound('alertDouble'));
+							case '3':
+								FlxG.sound.play(Paths.sound('alertTriple'));
+							case '4':
+								FlxG.sound.play(Paths.sound('alertQuadruple'));
+						}
+
+					case 'KB_AttackFire':
+						FlxG.sound.play(Paths.sound('attack'));
+				}
+			}
+		}
+	}
+}
+
+lastEditorEventTime = currentEditorTime;
 		_song.song = UI_songTitle.text;
 
 		strumLine.y = getYfromStrum((Conductor.songPosition - sectionStartTime()) / zoomList[curZoom] % (Conductor.stepCrochet * _song.notes[curSection].lengthInSteps));

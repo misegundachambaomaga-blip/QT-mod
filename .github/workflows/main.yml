@@ -1,4 +1,4 @@
-name: Build
+name: Build Psych Engine Windows
 
 on:
   push:
@@ -15,37 +15,36 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Descargar codigo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Instalar Haxe
+      - name: Install Haxe
         uses: krdlab/setup-haxe@master
         with:
           haxe-version: '4.2.5'
 
-      - name: Configurar Haxelib
-        shell: cmd
-        run: haxelib setup C:/haxelib
-
-      - name: Buscar Project.xml
+      - name: Find Psych Engine Project.xml
         id: project
         shell: pwsh
         run: |
-          $project = Get-ChildItem $env:GITHUB_WORKSPACE -Filter "Project.xml" -Recurse -File |
-            Where-Object { $_.FullName -notmatch '\\(\.git|node_modules)\\' } |
-            Select-Object -First 1
+          $project = Join-Path $env:GITHUB_WORKSPACE "PSYCH ENGINE/FNF-PsychEngine-main/Project.xml"
 
-          if ($null -eq $project) {
+          if (!(Test-Path $project)) {
+            Write-Host "No se encontro el archivo esperado."
             Get-ChildItem $env:GITHUB_WORKSPACE -Force
-            throw "No se encontro Project.xml"
+            throw "Project.xml no encontrado en la ruta indicada."
           }
 
-          "PROJECT_FILE=$($project.FullName)" >> $env:GITHUB_ENV
-          "PROJECT_DIR=$($project.Directory.FullName)" >> $env:GITHUB_ENV
-          Write-Host "Encontrado: $($project.FullName)"
+          "PROJECT_FILE=$project" >> $env:GITHUB_ENV
+          "PROJECT_DIR=$(Split-Path $project)" >> $env:GITHUB_ENV
+          Write-Host "Proyecto encontrado: $project"
 
-      - name: Instalar dependencias
-        shell: pwsh
+      - name: Configure Haxelib
+        shell: cmd
+        run: haxelib setup C:/haxelib
+
+      - name: Install dependencies
+        shell: cmd
         run: |
           haxelib install hxcpp
           haxelib install lime
@@ -55,42 +54,48 @@ jobs:
           haxelib install flixel-ui
           haxelib install flixel-addons
           haxelib install hscript
-          haxelib install hscript-ex
           haxelib install tjson
           haxelib install hxjsonast
           haxelib install newgrounds
-          haxelib install polymod
-          haxelib install discord_rpc
-          haxelib install hxcpp-debug-server
+          haxelib git polymod https://github.com/larsiusprime/polymod.git
           haxelib git linc_luajit https://github.com/AndreiRudenko/linc_luajit
+          haxelib git hscript-ex https://github.com/ianharrigan/hscript-ex
+          haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
+          haxelib install hxcpp-debug-server
           haxelib run lime setup -y
           haxelib list
 
-      - name: Crear version
+      - name: Create version
         shell: pwsh
-        run: '"${{ github.run_id }}" | Set-Content VERSION'
+        run: '"${{ github.run_id }}" | Set-Content "$env:PROJECT_DIR/VERSION"'
 
-      - name: Compilar Windows x64
+      - name: Compile Psych Engine Windows x64
         shell: pwsh
         run: |
           Set-Location "$env:PROJECT_DIR"
-          haxelib run lime build "$env:PROJECT_FILE" windows -64 --app-version="4.0.0-${{ github.run_id }}"
+          haxelib run lime build "$env:PROJECT_FILE" windows -64 --app-version="0.2.7-${{ github.run_id }}"
+
           if ($LASTEXITCODE -ne 0) {
-            throw "La compilacion de Windows fallo."
+            throw "La compilacion de Psych Engine fallo."
           }
 
-      - name: Mostrar ejecutables
+      - name: Verify executable
         shell: pwsh
         run: |
-          Get-ChildItem "$env:PROJECT_DIR" -Filter "*.exe" -Recurse -File |
-            ForEach-Object { Write-Host $_.FullName }
+          $output = Join-Path $env:PROJECT_DIR "export/release/windows/bin"
+          $exe = Get-ChildItem $output -Filter "*.exe" -Recurse -File -ErrorAction SilentlyContinue
 
-      - name: Subir compilacion
+          if (!$exe) {
+            throw "No se encontro ningun EXE en $output"
+          }
+
+          $exe | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Upload Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: windowsBuild
+          name: PsychEngine-Windows-x64
           path: |
-            **/export/release/windows/bin/**
-            export/release/windows/bin/**
+            PSYCH ENGINE/FNF-PsychEngine-main/export/release/windows/bin/**
           if-no-files-found: error
           retention-days: 7

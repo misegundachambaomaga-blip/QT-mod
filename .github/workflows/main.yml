@@ -11,114 +11,81 @@ permissions:
   contents: read
 
 jobs:
-  buildLinux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: '4.2.0'
-
-      - name: Install Haxelib
-        shell: bash
-        run: |
-          haxelib setup ~/haxelib
-          haxelib install hxcpp
-          haxelib install lime
-          haxelib install openfl
-          haxelib install newgrounds
-          haxelib --never install flixel
-          haxelib run lime setup flixel
-          haxelib run lime setup
-          haxelib install flixel-tools
-          haxelib install flixel-ui
-          haxelib install flixel-addons
-          haxelib install tjson
-          haxelib install hxjsonast
-          haxelib git linc_luajit https://github.com/AndreiRudenko/linc_luajit
-          haxelib install hscript
-          haxelib git hscript-ex https://github.com/ianharrigan/hscript-ex
-          haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
-          haxelib install hxcpp-debug-server
-          haxelib list
-
-      - name: Create Version Tag
-        run: echo "${{ github.run_id }}" > VERSION
-
-      - name: Compile
-        run: haxelib run lime build Project.xml linux --app-version="4.0.0-${{ github.run_id }}"
-
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: linuxBuild
-          path: export/release/linux/bin
-          if-no-files-found: error
-
   buildWindows:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Descargar codigo
+        uses: actions/checkout@v4
 
-      - uses: krdlab/setup-haxe@master
+      - name: Instalar Haxe
+        uses: krdlab/setup-haxe@master
         with:
-          haxe-version: '4.2.0'
+          haxe-version: '4.2.5'
 
-      - name: Find Project.xml
+      - name: Configurar Haxelib
+        shell: cmd
+        run: haxelib setup C:/haxelib
+
+      - name: Buscar Project.xml
+        id: project
         shell: pwsh
         run: |
-          $project = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "Project.xml" -Recurse -File |
+          $project = Get-ChildItem $env:GITHUB_WORKSPACE -Filter "Project.xml" -Recurse -File |
             Where-Object { $_.FullName -notmatch '\\(\.git|node_modules)\\' } |
             Select-Object -First 1
 
           if ($null -eq $project) {
-            Write-Host "Project.xml was not found."
             Get-ChildItem $env:GITHUB_WORKSPACE -Force
-            throw "No se encontro Project.xml en el repositorio."
+            throw "No se encontro Project.xml"
           }
 
           "PROJECT_FILE=$($project.FullName)" >> $env:GITHUB_ENV
           "PROJECT_DIR=$($project.Directory.FullName)" >> $env:GITHUB_ENV
-          Write-Host "Project.xml encontrado: $($project.FullName)"
+          Write-Host "Encontrado: $($project.FullName)"
 
-      - name: Install Haxelib
-        shell: cmd
+      - name: Instalar dependencias
+        shell: pwsh
         run: |
-          haxelib setup C:/haxelib
           haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
-          haxelib install newgrounds
-          haxelib --never install flixel
-          haxelib run lime setup flixel
-          haxelib run lime setup
+          haxelib install flixel
           haxelib install flixel-tools
           haxelib install flixel-ui
           haxelib install flixel-addons
+          haxelib install hscript
+          haxelib install hscript-ex
           haxelib install tjson
           haxelib install hxjsonast
-          haxelib git linc_luajit https://github.com/AndreiRudenko/linc_luajit
-          haxelib install hscript
-          haxelib git hscript-ex https://github.com/ianharrigan/hscript-ex
-          haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
+          haxelib install newgrounds
+          haxelib install polymod
+          haxelib install discord_rpc
           haxelib install hxcpp-debug-server
+          haxelib git linc_luajit https://github.com/AndreiRudenko/linc_luajit
+          haxelib run lime setup -y
           haxelib list
 
-      - name: Create Version Tag
+      - name: Crear version
         shell: pwsh
         run: '"${{ github.run_id }}" | Set-Content VERSION'
 
-      - name: Compile Windows
+      - name: Compilar Windows x64
         shell: pwsh
-        working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          haxelib run lime build "$env:PROJECT_FILE" windows --app-version="4.0.0-${{ github.run_id }}"
+          Set-Location "$env:PROJECT_DIR"
+          haxelib run lime build "$env:PROJECT_FILE" windows -64 --app-version="4.0.0-${{ github.run_id }}"
           if ($LASTEXITCODE -ne 0) {
             throw "La compilacion de Windows fallo."
           }
 
-      - name: Publish Artifact
+      - name: Mostrar ejecutables
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:PROJECT_DIR" -Filter "*.exe" -Recurse -File |
+            ForEach-Object { Write-Host $_.FullName }
+
+      - name: Subir compilacion
         uses: actions/upload-artifact@v4
         with:
           name: windowsBuild
@@ -127,48 +94,3 @@ jobs:
             export/release/windows/bin/**
           if-no-files-found: error
           retention-days: 7
-
-  buildMac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: krdlab/setup-haxe@master
-        with:
-          haxe-version: '4.2.0'
-
-      - name: Install Haxelib
-        shell: bash
-        run: |
-          haxelib setup ~/haxelib
-          haxelib install hxcpp
-          haxelib install lime
-          haxelib install openfl
-          haxelib install newgrounds
-          haxelib --never install flixel
-          haxelib run lime setup flixel
-          haxelib run lime setup
-          haxelib install flixel-tools
-          haxelib install flixel-ui
-          haxelib install flixel-addons
-          haxelib install tjson
-          haxelib install hxjsonast
-          haxelib git linc_luajit https://github.com/AndreiRudenko/linc_luajit
-          haxelib install hscript
-          haxelib git hscript-ex https://github.com/ianharrigan/hscript-ex
-          haxelib git discord_rpc https://github.com/Aidan63/linc_discord-rpc
-          haxelib install hxcpp-debug-server
-          haxelib list
-
-      - name: Create Version Tag
-        run: echo "${{ github.run_id }}" > VERSION
-
-      - name: Compile
-        run: haxelib run lime build Project.xml mac --app-version="4.0.0-${{ github.run_id }}"
-
-      - name: Publish Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macBuild
-          path: export/release/macos/bin
-          if-no-files-found: error

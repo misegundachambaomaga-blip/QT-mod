@@ -15,7 +15,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Descargar el codigo
+      - name: Descargar codigo
         uses: actions/checkout@v4
 
       - name: Instalar Haxe
@@ -27,31 +27,72 @@ jobs:
         shell: cmd
         run: haxelib setup C:\haxelib
 
-      - name: Instalar dependencias Haxe
+      - name: Instalar dependencias
         shell: cmd
         run: |
           haxelib install hxcpp
           haxelib install lime
           haxelib install openfl
 
-      - name: Compilar Psych Engine
-        shell: cmd
-        run: haxelib run lime build windows -64
-
-      - name: Comprobar archivos compilados
+      - name: Buscar Project.xml
+        id: project
         shell: pwsh
         run: |
-          $path = "export/release/windows/bin"
-          if (!(Test-Path $path)) {
-            Get-ChildItem export -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue
-            throw "No se encontro la carpeta esperada de compilacion."
+          $files = Get-ChildItem -Path . -Filter "Project.xml" -Recurse -File |
+            Where-Object { $_.FullName -notmatch '\\(node_modules|\.git)\\' }
+
+          if ($files.Count -eq 0) {
+            Write-Host "No se encontro Project.xml"
+            Get-ChildItem -Path . -Force
+            throw "Project.xml no existe en el repositorio."
           }
-          Get-ChildItem $path -Recurse
+
+          $project = $files | Select-Object -First 1
+          $dir = $project.Directory.FullName
+          "PROJECT_DIR=$dir" >> $env:GITHUB_ENV
+
+          Write-Host "Project.xml encontrado en: $($project.FullName)"
+
+      - name: Instalar Lime
+        shell: cmd
+        run: haxelib run lime setup -y
+
+      - name: Instalar dependencias del proyecto
+        shell: pwsh
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          if (Test-Path "hmm.json") {
+            haxelib install hmm
+            haxelib run hmm install
+          }
+
+      - name: Compilar Psych Engine
+        shell: pwsh
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          haxelib run lime build windows -64
+
+      - name: Buscar ejecutable
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path . -Filter "*.exe" -Recurse -File |
+            Where-Object { $_.FullName -notmatch '\\(\.git|node_modules)\\' }
+
+          if ($files.Count -eq 0) {
+            throw "La compilacion termino sin encontrar ningun EXE."
+          }
+
+          $files | Select-Object -ExpandProperty FullName
 
       - name: Subir compilacion
         uses: actions/upload-artifact@v4
         with:
           name: PsychEngine-0.7.3-Windows-x64
-          path: export/release/windows/bin/
+          path: |
+            **/*.exe
+            **/*.dll
+            **/*.pdb
+            **/assets/**
+            **/mods/**
           if-no-files-found: error
           retention-days: 7
